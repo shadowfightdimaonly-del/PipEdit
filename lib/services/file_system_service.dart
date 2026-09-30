@@ -33,6 +33,12 @@ class FileSystemService {
     return Directory(parent.path + Platform.pathSeparator + name).create();
   }
 
+  Future<FileSystemEntity> rename(FileSystemEntity entity, String newName) async {
+    final parent = entity.parent.path;
+    final target = parent + Platform.pathSeparator + newName;
+    return entity.rename(target);
+  }
+
   Future<void> delete(FileSystemEntity entity) {
     return entity.delete(recursive: true);
   }
