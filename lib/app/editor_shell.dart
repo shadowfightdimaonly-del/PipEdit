@@ -251,7 +251,7 @@ class _EditorShellState extends State<EditorShell> {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: _project.hasProject
                   ? ProjectTree(
-                      entries: _projectEntries,
+                      root: _project.projectDirectory!,
                       onFileTap: _openDiskFile,
                     )
                   : ListView(
