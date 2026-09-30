@@ -197,14 +197,14 @@ class _EditorShellState extends State<EditorShell> {
   }
 
   Future<void> _deleteSelected() async {
-    final file = _selectedDiskFile;
-    if (file == null) return;
+    final entity = _selectedEntity;
+    if (entity == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Удалить?'),
-        content: Text(file.path.split(Platform.pathSeparator).last),
+        content: Text(entity.path.split(Platform.pathSeparator).last),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -221,8 +221,16 @@ class _EditorShellState extends State<EditorShell> {
     if (confirmed != true) return;
 
     try {
-      await _project.delete(file);
+      await _project.delete(entity);
+      final doomed = _files.where((item) => item.path == entity.path).toList();
+      for (final item in doomed) {
+        _openFiles.remove(item);
+        _controllers.remove(item)?.dispose();
+        _history.remove(item);
+        _historyIndex.remove(item);
+      }
       _selected = null;
+      _selectedEntity = null;
       _selectedDiskFile = null;
       await _refreshProject();
     } catch (e) {
@@ -282,6 +290,7 @@ class _EditorShellState extends State<EditorShell> {
       _selected = file;
       _selectedDiskFile =
           file.path == null ? null : File(file.path!);
+      _selectedEntity = file.path == null ? null : File(file.path!);
       if (!_openFiles.contains(file)) _openFiles.add(file);
     });
   }
@@ -351,7 +360,10 @@ class _EditorShellState extends State<EditorShell> {
         file.name = newName;
         file.path = renamed.path;
       }
-      if (_selectedEntity?.path == entity.path) _selectedEntity = renamed;
+      if (_selectedEntity?.path == entity.path) {
+        _selectedEntity = renamed;
+        _selectedDiskFile = renamed is File ? renamed : null;
+      }
       await _refreshProject();
       if (mounted) setState(() {});
     } catch (e) {
@@ -532,7 +544,7 @@ class _EditorShellState extends State<EditorShell> {
             onPressed: () {
               final line = int.tryParse(input.text);
               if (line == null || line < 1) return;
-              final lines = file.content.split('\\n');
+              final lines = file.content.split('\n');
               if (line > lines.length) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('В файле только ${lines.length} строк')),
@@ -647,7 +659,7 @@ class _EditorShellState extends State<EditorShell> {
       if (entity is! File) continue;
       try {
         final content = await entity.readAsString();
-        final lines = content.split('\\n');
+        final lines = content.split('\n');
         for (var index = 0; index < lines.length; index++) {
           if (lines[index].toLowerCase().contains(text)) {
             matches.add(
@@ -676,7 +688,7 @@ class _EditorShellState extends State<EditorShell> {
     final file = _selected;
     if (file == null) return;
 
-    final lines = file.content.split('\\n');
+    final lines = file.content.split('\n');
     if (result.line < 1 || result.line > lines.length) return;
 
     var offset = 0;
