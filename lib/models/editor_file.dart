@@ -6,10 +6,10 @@ class EditorFile {
     this.path,
   });
 
-  final String name;
+  String name;
   String content;
   final bool isDirectory;
-  final String? path;
+  String? path;
 
   bool isDirty = false;
 
