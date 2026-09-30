@@ -425,6 +425,95 @@ class _EditorShellState extends State<EditorShell> {
     input.dispose();
   }
 
+  Future<void> _showProjectSearchDialog() async {
+    if (!_project.hasProject) {
+      _showError('Сначала откройте проект');
+      return;
+    }
+
+    final input = TextEditingController();
+    List<String> results = [];
+    bool searching = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Поиск по проекту'),
+          content: SizedBox(
+            width: 560,
+            height: 420,
+            child: Column(
+              children: [
+                TextField(
+                  controller: input,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Текст для поиска',
+                    prefixIcon: Icon(Icons.manage_search),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: searching
+                      ? const Center(child: CircularProgressIndicator())
+                      : results.isEmpty
+                          ? const Center(child: Text('Результатов пока нет'))
+                          : ListView.builder(
+                              itemCount: results.length,
+                              itemBuilder: (context, index) => ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.description_outlined),
+                                title: Text(results[index]),
+                              ),
+                            ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: searching
+                  ? null
+                  : () async {
+                      setDialogState(() => searching = true);
+                      results = await _searchProject(input.text);
+                      setDialogState(() => searching = false);
+                    },
+              child: const Text('Искать'),
+            ),
+          ],
+        ),
+      ),
+    );
+    input.dispose();
+  }
+
+  Future<List<String>> _searchProject(String query) async {
+    final text = query.trim().toLowerCase();
+    if (text.isEmpty || !_project.hasProject) return [];
+
+    final matches = <String>[];
+    await for (final entity in _project.projectDirectory!
+        .list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      try {
+        final content = await entity.readAsString();
+        if (content.toLowerCase().contains(text)) {
+          matches.add(entity.path);
+        }
+      } catch (_) {
+        // Skip binary or unreadable files.
+      }
+    }
+    matches.sort();
+    return matches;
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
