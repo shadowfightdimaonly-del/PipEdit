@@ -1,5 +1,5 @@
 class EditorFile {
-  const EditorFile({
+  EditorFile({
     required this.name,
     required this.content,
     this.isDirectory = false,
