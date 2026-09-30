@@ -1,10 +1,18 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+
 class FileSystemService {
   Future<Directory> pickProjectDirectory() async {
-    throw UnsupportedError(
-      'Выбор папки будет подключён через системный file picker.',
+    final path = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Выберите проект для PipEdit',
     );
+
+    if (path == null) {
+      throw const FilePickerCancelledException();
+    }
+
+    return Directory(path);
   }
 
   Future<List<FileSystemEntity>> listDirectory(Directory directory) {
@@ -25,5 +33,11 @@ class FileSystemService {
     return Directory(parent.path + Platform.pathSeparator + name).create();
   }
 
-  Future<void> delete(FileSystemEntity entity) => entity.delete(recursive: true);
+  Future<void> delete(FileSystemEntity entity) {
+    return entity.delete(recursive: true);
+  }
+}
+
+class FilePickerCancelledException implements Exception {
+  const FilePickerCancelledException();
 }
