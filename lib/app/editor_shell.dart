@@ -734,6 +734,11 @@ class _EditorShellState extends State<EditorShell> {
                 onPressed: _createFile,
                 icon: const Icon(Icons.note_add_outlined),
               ),
+      (     IconButton(
+  tooltip: 'Инструменты',
+  onPressed: _showTools,
+  icon: const Icon(Icons.terminal),
+),
               IconButton(
                 tooltip: 'Новая папка',
                 onPressed: _createFolder,
