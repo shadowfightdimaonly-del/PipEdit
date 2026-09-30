@@ -38,11 +38,17 @@ class _EditorShellState extends State<EditorShell> {
 
   final Map<EditorFile, CodeController> _controllers = {};
   final List<EditorFile> _openFiles = [];
+  final Map<EditorFile, List<String>> _history = {};
+  final Map<EditorFile, int> _historyIndex = {};
+  bool _restoringHistory = false;
+  FileSystemEntity? _selectedEntity;
   EditorFile? _selected;
   File? _selectedDiskFile;
   List<FileSystemEntity> _projectEntries = [];
 
   CodeController _controllerFor(EditorFile file) {
+    _history.putIfAbsent(file, () => [file.content]);
+    _historyIndex.putIfAbsent(file, () => 0);
     return _controllers.putIfAbsent(
       file,
       () => CodeController(
@@ -90,7 +96,13 @@ class _EditorShellState extends State<EditorShell> {
       if (!_files.contains(editorFile)) _files.add(editorFile);
 
       editorFile.content = content;
+      editorFile.name = name;
+      editorFile.path = file.path;
+      editorFile.isDirty = false;
+      _history[editorFile] = [content];
+      _historyIndex[editorFile] = 0;
       _selected = editorFile;
+      _selectedEntity = file;
       _selectedDiskFile = file;
 
       final controller = _controllerFor(editorFile);
@@ -254,6 +266,8 @@ class _EditorShellState extends State<EditorShell> {
     setState(() {
       _openFiles.remove(file);
       _controllers.remove(file)?.dispose();
+      _history.remove(file);
+      _historyIndex.remove(file);
       if (_selected == file) {
         _selected = _openFiles.isEmpty ? null : _openFiles.last;
         final selected = _selected;
@@ -272,6 +286,110 @@ class _EditorShellState extends State<EditorShell> {
     });
   }
 
+  void _recordHistory(EditorFile file, String value) {
+    if (_restoringHistory) return;
+    final history = _history.putIfAbsent(file, () => [file.content]);
+    var index = _historyIndex[file] ?? 0;
+    if (index < history.length - 1) history.removeRange(index + 1, history.length);
+    if (history.isEmpty || history.last != value) {
+      history.add(value);
+      if (history.length > 100) history.removeAt(0);
+      index = history.length - 1;
+    }
+    _historyIndex[file] = index;
+  }
+
+  void _restoreHistory(EditorFile file, String value) {
+    _restoringHistory = true;
+    file.content = value;
+    _controllerFor(file).fullText = value;
+    _restoringHistory = false;
+    if (mounted) setState(() => file.isDirty = true);
+  }
+
+  void _undo() {
+    final file = _selected;
+    if (file == null) return;
+    final history = _history[file];
+    final index = _historyIndex[file] ?? 0;
+    if (history == null || index <= 0) return;
+    _historyIndex[file] = index - 1;
+    _restoreHistory(file, history[index - 1]);
+  }
+
+  void _redo() {
+    final file = _selected;
+    if (file == null) return;
+    final history = _history[file];
+    final index = _historyIndex[file] ?? 0;
+    if (history == null || index >= history.length - 1) return;
+    _historyIndex[file] = index + 1;
+    _restoreHistory(file, history[index + 1]);
+  }
+
+  Future<void> _renameEntity(FileSystemEntity? entity) async {
+    if (entity == null) return;
+    final oldName = entity.path.split(Platform.pathSeparator).last;
+    final controller = TextEditingController(text: oldName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Переименовать'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('Переименовать')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newName == null || newName.isEmpty || newName == oldName) return;
+    try {
+      final renamed = await _project.rename(entity, newName);
+      final open = _files.where((item) => item.path == entity.path).toList();
+      for (final file in open) {
+        file.name = newName;
+        file.path = renamed.path;
+      }
+      if (_selectedEntity?.path == entity.path) _selectedEntity = renamed;
+      await _refreshProject();
+      if (mounted) setState(() {});
+    } catch (e) {
+      _showError('Не удалось переименовать: $e');
+    }
+  }
+
+  Future<void> _showQuickOpen() async {
+    if (!_project.hasProject) { _showError('Сначала откройте проект'); return; }
+    final files = <File>[];
+    await for (final entity in _project.projectDirectory!.list(recursive: true, followLinks: false)) {
+      if (entity is File) files.add(entity);
+    }
+    files.sort((a, b) => a.path.compareTo(b.path));
+    final query = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final q = query.text.toLowerCase();
+          final visible = files.where((f) => f.path.toLowerCase().contains(q)).take(100).toList();
+          return AlertDialog(
+            title: const Text('Быстро открыть'),
+            content: SizedBox(width: 600, height: 500, child: Column(children: [
+              TextField(controller: query, autofocus: true, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Имя или путь файла'), onChanged: (_) => setDialogState(() {})),
+              const SizedBox(height: 10),
+              Expanded(child: ListView.builder(itemCount: visible.length, itemBuilder: (context, index) {
+                final file = visible[index];
+                return ListTile(dense: true, title: Text(file.path, maxLines: 1, overflow: TextOverflow.ellipsis), onTap: () async { Navigator.pop(dialogContext); await _openDiskFile(file); });
+              })),
+            ])),
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Закрыть'))],
+          );
+        },
+      ),
+    );
+    query.dispose();
+  }
   Future<void> _showFindDialog() async {
     final input = TextEditingController();
     final file = _selected;
@@ -357,7 +475,12 @@ class _EditorShellState extends State<EditorShell> {
                 );
                 return;
               }
-              file.content = file.content.replaceAll(find.text, replacement.text);
+              final value = file.content.replaceAll(find.text, replacement.text);
+              _restoringHistory = true;
+              _controllerFor(file).fullText = value;
+              _restoringHistory = false;
+              file.content = value;
+              _recordHistory(file, value);
               _controllerFor(file).fullText = file.content;
               setState(() => file.isDirty = true);
               Navigator.pop(dialogContext);
@@ -593,6 +716,7 @@ class _EditorShellState extends State<EditorShell> {
           title: const Text('PipEdit'),
           actions: [
             if (_project.hasProject) ...[
+              IconButton(tooltip: 'Быстро открыть', onPressed: _showQuickOpen, icon: const Icon(Icons.manage_search)),
               IconButton(
                 tooltip: 'Новый файл',
                 onPressed: _createFile,
@@ -602,6 +726,11 @@ class _EditorShellState extends State<EditorShell> {
                 tooltip: 'Новая папка',
                 onPressed: _createFolder,
                 icon: const Icon(Icons.create_new_folder_outlined),
+              ),
+              IconButton(
+                tooltip: 'Переименовать',
+                onPressed: () => _renameEntity(_selectedEntity),
+                icon: const Icon(Icons.drive_file_rename_outline),
               ),
               IconButton(
                 tooltip: 'Удалить выбранное',
@@ -614,6 +743,8 @@ class _EditorShellState extends State<EditorShell> {
                 icon: const Icon(Icons.refresh),
               ),
             ],
+            IconButton(tooltip: 'Отменить', onPressed: _undo, icon: const Icon(Icons.undo)),
+            IconButton(tooltip: 'Повторить', onPressed: _redo, icon: const Icon(Icons.redo)),
             IconButton(
               tooltip: 'Поиск в файле',
               onPressed: _showFindDialog,
@@ -651,6 +782,8 @@ class _EditorShellState extends State<EditorShell> {
                     ? ProjectTree(
                         root: _project.projectDirectory!,
                         onFileTap: _openDiskFile,
+                        onEntityTap: (entity) => setState(() => _selectedEntity = entity),
+                        onEntityLongPress: _renameEntity,
                       )
                     : ListView(
                         children: [
@@ -751,6 +884,7 @@ class _EditorShellState extends State<EditorShell> {
                             ),
                             onChanged: (value) {
                               selected.content = value;
+                              _recordHistory(selected, value);
                               if (!selected.isDirty) setState(() => selected.isDirty = true);
                             },
                           ),
