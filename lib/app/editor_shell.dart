@@ -73,7 +73,7 @@ class _EditorShellState extends State<EditorShell> {
       EditorFile? editorFile;
 
       for (final item in _files) {
-        if (item.name == name) {
+        if (item.name == name && item.path == file.path) {
           editorFile = item;
           break;
         }
@@ -352,10 +352,7 @@ class _EditorShellState extends State<EditorShell> {
                                     : Icons.description_outlined,
                               ),
                               title: Text(file.name),
-                              onTap: () => setState(() {
-                                _selected = file;
-                                _selectedDiskFile = null;
-                              }),
+                              onTap: () => _selectFile(file),
                             ),
                         ],
                       ),
