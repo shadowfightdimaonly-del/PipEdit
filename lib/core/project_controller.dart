@@ -46,6 +46,10 @@ class ProjectController {
     return fileSystem.createDirectory(directory, name);
   }
 
+  Future<FileSystemEntity> rename(FileSystemEntity entity, String newName) {
+    return fileSystem.rename(entity, newName);
+  }
+
   Future<void> delete(FileSystemEntity entity) {
     return fileSystem.delete(entity);
   }
