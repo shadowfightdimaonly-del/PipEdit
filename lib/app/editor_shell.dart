@@ -1,6 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_code_editor/flutter_code_editor.dart';
+import 'package:flutter_highlight/themes/monokai-sublime.dart';
+import 'package:highlight/languages/dart.dart';
 
 import '../core/project_controller.dart';
 import '../models/editor_file.dart';
@@ -16,19 +19,28 @@ class EditorShell extends StatefulWidget {
 class _EditorShellState extends State<EditorShell> {
   final ProjectController _project = ProjectController();
   final List<EditorFile> _files = [
-    EditorFile(name: 'main.dart', content: 'void main() {\n  print("Hello from PipEdit!");\n}\n'),
-    EditorFile(name: 'README.md', content: '# PipEdit\n\nДобро пожаловать в PipEdit.\n'),
+    EditorFile(
+      name: 'main.dart',
+      content: 'void main() {\n  print("Hello from PipEdit!");\n}\n',
+    ),
+    EditorFile(
+      name: 'README.md',
+      content: '# PipEdit\n\nДобро пожаловать в PipEdit.\n',
+    ),
   ];
 
-  final Map<String, TextEditingController> _controllers = {};
+  final Map<String, CodeController> _controllers = {};
   EditorFile? _selected;
   File? _selectedDiskFile;
   List<FileSystemEntity> _projectEntries = [];
 
-  TextEditingController _controllerFor(EditorFile file) {
+  CodeController _controllerFor(EditorFile file) {
     return _controllers.putIfAbsent(
       file.name,
-      () => TextEditingController(text: file.content),
+      () => CodeController(
+        text: file.content,
+        language: file.extension == 'dart' ? dart : null,
+      ),
     );
   }
 
@@ -58,18 +70,24 @@ class _EditorShellState extends State<EditorShell> {
       final content = await _project.read(file);
       final name = file.path.split(Platform.pathSeparator).last;
       EditorFile? editorFile;
+
       for (final item in _files) {
         if (item.name == name) {
           editorFile = item;
           break;
         }
       }
+
       editorFile ??= EditorFile(name: name, content: content);
       if (!_files.contains(editorFile)) _files.add(editorFile);
+
       editorFile.content = content;
       _selected = editorFile;
       _selectedDiskFile = file;
-      _controllerFor(editorFile).text = content;
+
+      final controller = _controllerFor(editorFile);
+      controller.fullText = content;
+
       if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
@@ -88,6 +106,7 @@ class _EditorShellState extends State<EditorShell> {
       );
       return;
     }
+
     try {
       await _project.save(diskFile, file.content);
       if (!mounted) return;
@@ -134,6 +153,7 @@ class _EditorShellState extends State<EditorShell> {
     if (!_project.hasProject) return;
     final name = await _askName('Новый файл', 'например: main.dart');
     if (name == null) return;
+
     try {
       await _project.createFile(name);
       await _refreshProject();
@@ -146,6 +166,7 @@ class _EditorShellState extends State<EditorShell> {
     if (!_project.hasProject) return;
     final name = await _askName('Новая папка', 'например: lib');
     if (name == null) return;
+
     try {
       await _project.createDirectory(name);
       await _refreshProject();
@@ -177,6 +198,7 @@ class _EditorShellState extends State<EditorShell> {
     );
 
     if (confirmed != true) return;
+
     try {
       await _project.delete(file);
       _selected = null;
@@ -189,7 +211,9 @@ class _EditorShellState extends State<EditorShell> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -203,124 +227,130 @@ class _EditorShellState extends State<EditorShell> {
   @override
   Widget build(BuildContext context) {
     final selected = _selected;
-    final textController = selected == null ? null : _controllerFor(selected);
+    final codeController =
+        selected == null ? null : _controllerFor(selected);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('PipEdit'),
-        actions: [
-          if (_project.hasProject) ...[
+    return CodeTheme(
+      data: CodeThemeData(styles: monokaiSublimeTheme),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('PipEdit'),
+          actions: [
+            if (_project.hasProject) ...[
+              IconButton(
+                tooltip: 'Новый файл',
+                onPressed: _createFile,
+                icon: const Icon(Icons.note_add_outlined),
+              ),
+              IconButton(
+                tooltip: 'Новая папка',
+                onPressed: _createFolder,
+                icon: const Icon(Icons.create_new_folder_outlined),
+              ),
+              IconButton(
+                tooltip: 'Удалить выбранное',
+                onPressed: _deleteSelected,
+                icon: const Icon(Icons.delete_outline),
+              ),
+              IconButton(
+                tooltip: 'Обновить',
+                onPressed: _refreshProject,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
             IconButton(
-              tooltip: 'Новый файл',
-              onPressed: _createFile,
-              icon: const Icon(Icons.note_add_outlined),
+              tooltip: 'Открыть проект',
+              onPressed: _openProject,
+              icon: const Icon(Icons.folder_open),
             ),
             IconButton(
-              tooltip: 'Новая папка',
-              onPressed: _createFolder,
-              icon: const Icon(Icons.create_new_folder_outlined),
-            ),
-            IconButton(
-              tooltip: 'Удалить выбранное',
-              onPressed: _deleteSelected,
-              icon: const Icon(Icons.delete_outline),
-            ),
-            IconButton(
-              tooltip: 'Обновить',
-              onPressed: _refreshProject,
-              icon: const Icon(Icons.refresh),
+              tooltip: 'Сохранить',
+              onPressed: _save,
+              icon: const Icon(Icons.save_outlined),
             ),
           ],
-          IconButton(
-            tooltip: 'Открыть проект',
-            onPressed: _openProject,
-            icon: const Icon(Icons.folder_open),
-          ),
-          IconButton(
-            tooltip: 'Сохранить',
-            onPressed: _save,
-            icon: const Icon(Icons.save_outlined),
-          ),
-        ],
-      ),
-      body: Row(
-        children: [
-          SizedBox(
-            width: 250,
-            child: Material(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: _project.hasProject
-                  ? ProjectTree(
-                      root: _project.projectDirectory!,
-                      onFileTap: _openDiskFile,
-                    )
-                  : ListView(
-                      children: [
-                        const ListTile(
-                          leading: Icon(Icons.folder_outlined),
-                          title: Text('Проект'),
-                        ),
-                        for (final file in _files)
-                          ListTile(
-                            selected: file == selected,
-                            leading: Icon(
-                              file.extension == 'dart'
-                                  ? Icons.code
-                                  : Icons.description_outlined,
-                            ),
-                            title: Text(file.name),
-                            onTap: () => setState(() {
-                              _selected = file;
-                              _selectedDiskFile = null;
-                            }),
+        ),
+        body: Row(
+          children: [
+            SizedBox(
+              width: 250,
+              child: Material(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: _project.hasProject
+                    ? ProjectTree(
+                        root: _project.projectDirectory!,
+                        onFileTap: _openDiskFile,
+                      )
+                    : ListView(
+                        children: [
+                          const ListTile(
+                            leading: Icon(Icons.folder_outlined),
+                            title: Text('Проект'),
                           ),
-                      ],
-                    ),
-            ),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: selected == null || textController == null
-                ? const Center(
-                    child: Text('Откройте файл, чтобы начать редактирование'),
-                  )
-                : Column(
-                    children: [
-                      Container(
-                        height: 44,
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          selected.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: TextField(
-                            controller: textController,
-                            expands: true,
-                            maxLines: null,
-                            minLines: null,
-                            textAlignVertical: TextAlignVertical.top,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'Начните писать код...',
+                          for (final file in _files)
+                            ListTile(
+                              selected: file == selected,
+                              leading: Icon(
+                                file.extension == 'dart'
+                                    ? Icons.code
+                                    : Icons.description_outlined,
+                              ),
+                              title: Text(file.name),
+                              onTap: () => setState(() {
+                                _selected = file;
+                                _selectedDiskFile = null;
+                              }),
                             ),
+                        ],
+                      ),
+              ),
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(
+              child: selected == null || codeController == null
+                  ? const Center(
+                      child: Text(
+                        'Откройте файл, чтобы начать редактирование',
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        Container(
+                          height: 44,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            selected.name,
                             style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: CodeField(
+                            controller: codeController,
+                            expands: true,
+                            wrap: false,
+                            padding: const EdgeInsets.all(12),
+                            textStyle: const TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 15,
+                            ),
+                            gutterStyle: const GutterStyle(
+                              showErrors: true,
+                              showFoldingHandles: true,
+                              showLineNumbers: true,
+                              width: 64,
                             ),
                             onChanged: (value) => selected.content = value,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
