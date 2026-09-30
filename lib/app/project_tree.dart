@@ -6,11 +6,15 @@ class ProjectTree extends StatefulWidget {
   const ProjectTree({
     required this.root,
     required this.onFileTap,
+    this.onEntityTap,
+    this.onEntityLongPress,
     super.key,
   });
 
   final Directory root;
   final ValueChanged<File> onFileTap;
+  final ValueChanged<FileSystemEntity>? onEntityTap;
+  final ValueChanged<FileSystemEntity>? onEntityLongPress;
 
   @override
   State<ProjectTree> createState() => _ProjectTreeState();
@@ -38,7 +42,7 @@ class _ProjectTreeState extends State<ProjectTree> {
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Не удалось открыть '+_name(directory))),
+            SnackBar(content: Text('Не удалось открыть ' + _name(directory))),
           );
         }
       } finally {
@@ -77,7 +81,10 @@ class _ProjectTreeState extends State<ProjectTree> {
         result.add(
           ListTile(
             dense: true,
-            contentPadding: EdgeInsets.only(left: 12.0 + depth * 18.0, right: 8),
+            contentPadding: EdgeInsets.only(
+              left: 12.0 + depth * 18.0,
+              right: 8,
+            ),
             leading: loading
                 ? const SizedBox(
                     width: 24,
@@ -86,7 +93,11 @@ class _ProjectTreeState extends State<ProjectTree> {
                   )
                 : Icon(expanded ? Icons.folder_open : Icons.folder_outlined),
             title: Text(name, overflow: TextOverflow.ellipsis),
-            onTap: () => _toggleDirectory(entry),
+            onTap: () {
+              widget.onEntityTap?.call(entry);
+              _toggleDirectory(entry);
+            },
+            onLongPress: () => widget.onEntityLongPress?.call(entry),
           ),
         );
 
@@ -98,10 +109,17 @@ class _ProjectTreeState extends State<ProjectTree> {
         result.add(
           ListTile(
             dense: true,
-            contentPadding: EdgeInsets.only(left: 12.0 + depth * 18.0, right: 8),
+            contentPadding: EdgeInsets.only(
+              left: 12.0 + depth * 18.0,
+              right: 8,
+            ),
             leading: const Icon(Icons.insert_drive_file_outlined),
             title: Text(name, overflow: TextOverflow.ellipsis),
-            onTap: () => widget.onFileTap(entry),
+            onTap: () {
+              widget.onEntityTap?.call(entry);
+              widget.onFileTap(entry as File);
+            },
+            onLongPress: () => widget.onEntityLongPress?.call(entry),
           ),
         );
       }
@@ -120,14 +138,14 @@ class _ProjectTreeState extends State<ProjectTree> {
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Ошибка чтения проекта: '+snapshot.error.toString()));
+          return Center(
+            child: Text('Ошибка чтения проекта: ' + snapshot.error.toString()),
+          );
         }
 
         final entries = [...?snapshot.data]..sort(_sortEntries);
 
-        return ListView(
-          children: _buildEntries(entries, 0),
-        );
+        return ListView(children: _buildEntries(entries, 0));
       },
     );
   }
