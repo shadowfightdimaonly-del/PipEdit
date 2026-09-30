@@ -9,6 +9,13 @@ import '../core/project_controller.dart';
 import '../models/editor_file.dart';
 import 'project_tree.dart';
 
+class _ProjectSearchResult {
+  const _ProjectSearchResult({required this.file, required this.line, required this.snippet});
+  final File file;
+  final int line;
+  final String snippet;
+}
+
 class EditorShell extends StatefulWidget {
   const EditorShell({super.key});
 
@@ -432,7 +439,7 @@ class _EditorShellState extends State<EditorShell> {
     }
 
     final input = TextEditingController();
-    List<String> results = [];
+    List<_ProjectSearchResult> results = [];
     bool searching = false;
 
     await showDialog<void>(
@@ -461,11 +468,25 @@ class _EditorShellState extends State<EditorShell> {
                           ? const Center(child: Text('Результатов пока нет'))
                           : ListView.builder(
                               itemCount: results.length,
-                              itemBuilder: (context, index) => ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.description_outlined),
-                                title: Text(results[index]),
-                              ),
+                              itemBuilder: (context, index) {
+                                final result = results[index];
+                                return ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.description_outlined),
+                                  title: Text(
+                                    '${result.file.path.split(Platform.pathSeparator).last}:${result.line}',
+                                  ),
+                                  subtitle: Text(
+                                    result.snippet,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(dialogContext);
+                                    await _openSearchResult(result);
+                                  },
+                                );
+                              },
                             ),
                 ),
               ],
@@ -493,25 +514,55 @@ class _EditorShellState extends State<EditorShell> {
     input.dispose();
   }
 
-  Future<List<String>> _searchProject(String query) async {
+  Future<List<_ProjectSearchResult>> _searchProject(String query) async {
     final text = query.trim().toLowerCase();
     if (text.isEmpty || !_project.hasProject) return [];
 
-    final matches = <String>[];
+    final matches = <_ProjectSearchResult>[];
     await for (final entity in _project.projectDirectory!
         .list(recursive: true, followLinks: false)) {
       if (entity is! File) continue;
       try {
         final content = await entity.readAsString();
-        if (content.toLowerCase().contains(text)) {
-          matches.add(entity.path);
+        final lines = content.split('\\n');
+        for (var index = 0; index < lines.length; index++) {
+          if (lines[index].toLowerCase().contains(text)) {
+            matches.add(
+              _ProjectSearchResult(
+                file: entity,
+                line: index + 1,
+                snippet: lines[index].trim(),
+              ),
+            );
+          }
         }
       } catch (_) {
         // Skip binary or unreadable files.
       }
     }
-    matches.sort();
+
+    matches.sort((a, b) {
+      final pathCompare = a.file.path.compareTo(b.file.path);
+      return pathCompare != 0 ? pathCompare : a.line.compareTo(b.line);
+    });
     return matches;
+  }
+
+  Future<void> _openSearchResult(_ProjectSearchResult result) async {
+    await _openDiskFile(result.file);
+    final file = _selected;
+    if (file == null) return;
+
+    final lines = file.content.split('\\n');
+    if (result.line < 1 || result.line > lines.length) return;
+
+    var offset = 0;
+    for (var i = 0; i < result.line - 1; i++) {
+      offset += lines[i].length + 1;
+    }
+
+    _controllerFor(file).selection = TextSelection.collapsed(offset: offset);
+    if (mounted) setState(() {});
   }
 
   void _showError(String message) {
