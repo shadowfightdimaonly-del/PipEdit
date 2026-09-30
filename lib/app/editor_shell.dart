@@ -29,7 +29,8 @@ class _EditorShellState extends State<EditorShell> {
     ),
   ];
 
-  final Map<String, CodeController> _controllers = {};
+  final Map<EditorFile, CodeController> _controllers = {};
+  final List<EditorFile> _openFiles = [];
   EditorFile? _selected;
   File? _selectedDiskFile;
   List<FileSystemEntity> _projectEntries = [];
@@ -109,6 +110,7 @@ class _EditorShellState extends State<EditorShell> {
 
     try {
       await _project.save(diskFile, file.content);
+      file.isDirty = false;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(file.name + ' сохранён')),
@@ -207,6 +209,60 @@ class _EditorShellState extends State<EditorShell> {
     } catch (e) {
       _showError('Не удалось удалить: $e');
     }
+  }
+
+  Future<void> _closeFile(EditorFile file) async {
+    if (file.isDirty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Есть несохранённые изменения'),
+          content: Text('Сохранить изменения в '+file.name+'?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Не сохранять'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Сохранить'),
+            ),
+          ],
+        ),
+      );
+
+      if (discard == null) return;
+      if (discard == true) {
+        _selected = file;
+        _selectedDiskFile = file.path == null ? null : File(file.path!);
+        await _save();
+        if (file.isDirty) return;
+      }
+    }
+
+    setState(() {
+      _openFiles.remove(file);
+      _controllers.remove(file)?.dispose();
+      if (_selected == file) {
+        _selected = _openFiles.isEmpty ? null : _openFiles.last;
+        final selected = _selected;
+        _selectedDiskFile =
+            selected?.path == null ? null : File(selected!.path!);
+      }
+    });
+  }
+
+  void _selectFile(EditorFile file) {
+    setState(() {
+      _selected = file;
+      _selectedDiskFile =
+          file.path == null ? null : File(file.path!);
+      if (!_openFiles.contains(file)) _openFiles.add(file);
+    });
   }
 
   void _showError(String message) {
@@ -327,6 +383,44 @@ class _EditorShellState extends State<EditorShell> {
                           ),
                         ),
                         const Divider(height: 1),
+                      if (_openFiles.isNotEmpty)
+                        SizedBox(
+                          height: 38,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              for (final file in _openFiles)
+                                InkWell(
+                                  onTap: () => _selectFile(file),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          width: 2,
+                                          color: file == selected
+                                              ? Theme.of(context).colorScheme.primary
+                                              : Colors.transparent,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(file.name + (file.isDirty ? ' •' : '')),
+                                        const SizedBox(width: 6),
+                                        InkWell(
+                                          onTap: () => _closeFile(file),
+                                          child: const Icon(Icons.close, size: 16),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      const Divider(height: 1),
                         Expanded(
                           child: CodeField(
                             controller: codeController,
@@ -343,7 +437,10 @@ class _EditorShellState extends State<EditorShell> {
                               showLineNumbers: true,
                               width: 64,
                             ),
-                            onChanged: (value) => selected.content = value,
+                            onChanged: (value) {
+                              selected.content = value;
+                              if (!selected.isDirty) setState(() => selected.isDirty = true);
+                            },
                           ),
                         ),
                       ],
