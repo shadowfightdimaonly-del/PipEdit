@@ -37,7 +37,7 @@ class _EditorShellState extends State<EditorShell> {
 
   CodeController _controllerFor(EditorFile file) {
     return _controllers.putIfAbsent(
-      file.name,
+      file,
       () => CodeController(
         text: file.content,
         language: file.extension == 'dart' ? dart : null,
@@ -79,7 +79,7 @@ class _EditorShellState extends State<EditorShell> {
         }
       }
 
-      editorFile ??= EditorFile(name: name, content: content);
+      editorFile ??= EditorFile(name: name, content: content, path: file.path);
       if (!_files.contains(editorFile)) _files.add(editorFile);
 
       editorFile.content = content;
@@ -265,6 +265,166 @@ class _EditorShellState extends State<EditorShell> {
     });
   }
 
+  Future<void> _showFindDialog() async {
+    final input = TextEditingController();
+    final file = _selected;
+    if (file == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Поиск в файле'),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Что найти',
+            prefixIcon: Icon(Icons.search),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final query = input.text;
+              if (query.isEmpty) return;
+              final index = file.content.indexOf(query);
+              if (index == -1) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Совпадений не найдено')),
+                );
+                return;
+              }
+              _controllerFor(file).selection = TextSelection(
+                baseOffset: index,
+                extentOffset: index + query.length,
+              );
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Найти'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+  }
+
+  Future<void> _showReplaceDialog() async {
+    final find = TextEditingController();
+    final replacement = TextEditingController();
+    final file = _selected;
+    if (file == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Заменить в файле'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: find,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Найти'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: replacement,
+              decoration: const InputDecoration(labelText: 'Заменить на'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (find.text.isEmpty) return;
+              final count = _countOccurrences(file.content, find.text);
+              if (count == 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Совпадений не найдено')),
+                );
+                return;
+              }
+              file.content = file.content.replaceAll(find.text, replacement.text);
+              _controllerFor(file).fullText = file.content;
+              setState(() => file.isDirty = true);
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Заменено: $count')),
+              );
+            },
+            child: const Text('Заменить всё'),
+          ),
+        ],
+      ),
+    );
+    find.dispose();
+    replacement.dispose();
+  }
+
+  int _countOccurrences(String text, String query) {
+    if (query.isEmpty) return 0;
+    var count = 0;
+    var start = 0;
+    while (true) {
+      final index = text.indexOf(query, start);
+      if (index == -1) return count;
+      count++;
+      start = index + query.length;
+    }
+  }
+
+  Future<void> _showGoToLineDialog() async {
+    final file = _selected;
+    if (file == null) return;
+    final input = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Перейти к строке'),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: 'Номер строки'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final line = int.tryParse(input.text);
+              if (line == null || line < 1) return;
+              final lines = file.content.split('\\n');
+              if (line > lines.length) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('В файле только ${lines.length} строк')),
+                );
+                return;
+              }
+              var offset = 0;
+              for (var i = 0; i < line - 1; i++) {
+                offset += lines[i].length + 1;
+              }
+              _controllerFor(file).selection =
+                  TextSelection.collapsed(offset: offset);
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Перейти'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -314,6 +474,21 @@ class _EditorShellState extends State<EditorShell> {
                 icon: const Icon(Icons.refresh),
               ),
             ],
+            IconButton(
+              tooltip: 'Поиск в файле',
+              onPressed: _showFindDialog,
+              icon: const Icon(Icons.search),
+            ),
+            IconButton(
+              tooltip: 'Заменить',
+              onPressed: _showReplaceDialog,
+              icon: const Icon(Icons.find_replace),
+            ),
+            IconButton(
+              tooltip: 'Перейти к строке',
+              onPressed: _showGoToLineDialog,
+              icon: const Icon(Icons.format_list_numbered),
+            ),
             IconButton(
               tooltip: 'Открыть проект',
               onPressed: _openProject,
