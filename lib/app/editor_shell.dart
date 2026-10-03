@@ -578,7 +578,7 @@ class _EditorShellState extends State<EditorShell> {
       context: context,
       isScrollControlled: true,
       builder: (_) => SizedBox(
-        height: MediaQuery.sizeOf(context).size.height * .65,
+        height: MediaQuery.sizeOf(context).height * .65,
         child: ToolPanel(
           project: _project.projectDirectory!,
         ),
