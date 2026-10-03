@@ -81,7 +81,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '\${selectedSize.toStringAsFixed(0)} px',
+                '${selectedSize.toStringAsFixed(0)} px',
                 style: const TextStyle(fontSize: 18),
               ),
               Slider(
@@ -89,7 +89,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
                 min: _minFontSize,
                 max: _maxFontSize,
                 divisions: 14,
-                label: '\${selectedSize.toStringAsFixed(0)} px',
+                label: '${selectedSize.toStringAsFixed(0)} px',
                 onChanged: (value) {
                   setDialogState(() => selectedSize = value);
                 },
