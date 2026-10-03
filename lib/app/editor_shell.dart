@@ -6,6 +6,7 @@ import 'package:flutter_highlight/themes/monokai-sublime.dart';
 import 'package:highlight/languages/dart.dart';
 
 import '../core/project_controller.dart';
+import '../services/file_system_service.dart';
 import '../models/editor_file.dart';
 import 'project_tree.dart';
 
@@ -567,28 +568,29 @@ class _EditorShellState extends State<EditorShell> {
     input.dispose();
   }
 
+  void _showTools() {
+    if (!_project.hasProject) {
+      _showError('Сначала откройте проект');
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SizedBox(
+        height: MediaQuery.sizeOf(context).size.height * .65,
+        child: ToolPanel(
+          project: _project.projectDirectory!,
+        ),
+      ),
+    );
+  }
+
   Future<void> _showProjectSearchDialog() async {
     if (!_project.hasProject) {
       _showError('Сначала откройте проект');
       return;
     }
-   void _showTools() {
-  if (!_project.hasProject) {
-    _showError('Сначала откройте проект');
-    return;
-  }
-
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (_) => SizedBox(
-      height: MediaQuery.sizeOf(context).height * .65,
-      child: ToolPanel(
-        project: _project.projectDirectory!,
-      ),
-    ),
-  );
-}
 
     final input = TextEditingController();
     List<_ProjectSearchResult> results = [];
