@@ -1,0 +1,5 @@
+package com.pipis.pip_edit
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
