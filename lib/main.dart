@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'app/editor_shell.dart';
+import 'app/file_browser_screen.dart';
 
 void main() {
   runApp(const PipEditApp());
@@ -19,7 +19,7 @@ class PipEditApp extends StatelessWidget {
         colorSchemeSeed: Colors.deepPurple,
         useMaterial3: true,
       ),
-      home: const EditorShell(),
+      home: const FileBrowserScreen(),
     );
   }
 }
