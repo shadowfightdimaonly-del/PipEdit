@@ -9,7 +9,6 @@ import 'package:highlight/languages/cs.dart';
 import 'package:highlight/languages/css.dart';
 import 'package:highlight/languages/dart.dart';
 import 'package:highlight/languages/go.dart';
-import 'package:highlight/languages/html.dart';
 import 'package:highlight/languages/java.dart';
 import 'package:highlight/languages/javascript.dart';
 import 'package:highlight/languages/json.dart';
@@ -153,7 +152,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
         return xml;
       case 'html':
       case 'htm':
-        return html;
+        return xml;
       case 'css':
         return css;
       case 'py':
