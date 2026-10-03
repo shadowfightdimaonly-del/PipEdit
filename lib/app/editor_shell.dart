@@ -245,7 +245,7 @@ class _EditorShellState extends State<EditorShell> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Есть несохранённые изменения'),
-          content: Text('Сохранить изменения в '+file.name+'?'),
+          content: Text('Сохранить изменения в ' + file.name + '?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -403,6 +403,7 @@ class _EditorShellState extends State<EditorShell> {
     );
     query.dispose();
   }
+
   Future<void> _showFindDialog() async {
     final input = TextEditingController();
     final file = _selected;
@@ -753,11 +754,11 @@ class _EditorShellState extends State<EditorShell> {
                 onPressed: _createFile,
                 icon: const Icon(Icons.note_add_outlined),
               ),
-      (     IconButton(
-  tooltip: 'Инструменты',
-  onPressed: _showTools,
-  icon: const Icon(Icons.terminal),
-),
+              IconButton(
+                tooltip: 'Инструменты',
+                onPressed: _showTools,
+                icon: const Icon(Icons.terminal),
+              ),
               IconButton(
                 tooltip: 'Новая папка',
                 onPressed: _createFolder,
@@ -864,44 +865,44 @@ class _EditorShellState extends State<EditorShell> {
                           ),
                         ),
                         const Divider(height: 1),
-                      if (_openFiles.isNotEmpty)
-                        SizedBox(
-                          height: 38,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              for (final file in _openFiles)
-                                InkWell(
-                                  onTap: () => _selectFile(file),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          width: 2,
-                                          color: file == selected
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Colors.transparent,
+                        if (_openFiles.isNotEmpty)
+                          SizedBox(
+                            height: 38,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                for (final file in _openFiles)
+                                  InkWell(
+                                    onTap: () => _selectFile(file),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                          bottom: BorderSide(
+                                            width: 2,
+                                            color: file == selected
+                                                ? Theme.of(context).colorScheme.primary
+                                                : Colors.transparent,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(file.name + (file.isDirty ? ' •' : '')),
-                                        const SizedBox(width: 6),
-                                        InkWell(
-                                          onTap: () => _closeFile(file),
-                                          child: const Icon(Icons.close, size: 16),
-                                        ),
-                                      ],
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(file.name + (file.isDirty ? ' •' : '')),
+                                          const SizedBox(width: 6),
+                                          InkWell(
+                                            onTap: () => _closeFile(file),
+                                            child: const Icon(Icons.close, size: 16),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      const Divider(height: 1),
+                        const Divider(height: 1),
                         Expanded(
                           child: CodeField(
                             controller: codeController,
