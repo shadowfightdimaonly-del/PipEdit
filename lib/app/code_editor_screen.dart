@@ -22,6 +22,7 @@ import 'package:highlight/languages/sql.dart';
 import 'package:highlight/languages/typescript.dart';
 import 'package:highlight/languages/xml.dart';
 import 'package:highlight/languages/yaml.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CodeEditorScreen extends StatefulWidget {
   const CodeEditorScreen({required this.file, super.key});
@@ -33,9 +34,15 @@ class CodeEditorScreen extends StatefulWidget {
 }
 
 class _CodeEditorScreenState extends State<CodeEditorScreen> {
+  static const _fontSizeKey = 'editor_font_size';
+  static const _defaultFontSize = 15.0;
+  static const _minFontSize = 10.0;
+  static const _maxFontSize = 24.0;
+
   late final CodeController _controller;
   late String _original;
   bool _saving = false;
+  double _fontSize = _defaultFontSize;
 
   bool get _dirty => _controller.fullText != _original;
 
@@ -48,7 +55,78 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
       analyzer: const DefaultLocalAnalyzer(),
     );
     _original = '';
+    _loadFontSize();
     _load();
+  }
+
+  Future<void> _loadFontSize() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedSize = preferences.getDouble(_fontSizeKey);
+    if (!mounted || savedSize == null) return;
+
+    setState(() {
+      _fontSize = savedSize.clamp(_minFontSize, _maxFontSize).toDouble();
+    });
+  }
+
+  Future<void> _showFontSizeDialog() async {
+    var selectedSize = _fontSize;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Размер текста'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '\${selectedSize.toStringAsFixed(0)} px',
+                style: const TextStyle(fontSize: 18),
+              ),
+              Slider(
+                value: selectedSize,
+                min: _minFontSize,
+                max: _maxFontSize,
+                divisions: 14,
+                label: '\${selectedSize.toStringAsFixed(0)} px',
+                onChanged: (value) {
+                  setDialogState(() => selectedSize = value);
+                },
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      setDialogState(() => selectedSize = _defaultFontSize);
+                    },
+                    child: const Text('Сбросить'),
+                  ),
+                  const Text('10–24 px'),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final preferences = await SharedPreferences.getInstance();
+                await preferences.setDouble(_fontSizeKey, selectedSize);
+                if (!mounted) return;
+                setState(() => _fontSize = selectedSize);
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Применить'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   dynamic _languageFor(File file) {
@@ -338,6 +416,11 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
             title: Text(name, overflow: TextOverflow.ellipsis),
             actions: [
               IconButton(
+                tooltip: 'Размер текста',
+                onPressed: _showFontSizeDialog,
+                icon: const Icon(Icons.format_size),
+              ),
+              IconButton(
                 tooltip: 'Поиск',
                 onPressed: _find,
                 icon: const Icon(Icons.search),
@@ -373,15 +456,19 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
             smartDashesType: SmartDashesType.disabled,
             smartQuotesType: SmartQuotesType.disabled,
             padding: const EdgeInsets.all(12),
-            textStyle: const TextStyle(
+            textStyle: TextStyle(
               fontFamily: 'monospace',
-              fontSize: 15,
+              fontSize: _fontSize,
             ),
-            gutterStyle: const GutterStyle(
+            gutterStyle: GutterStyle(
               showErrors: true,
               showFoldingHandles: true,
               showLineNumbers: true,
               width: 56,
+              textStyle: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: _fontSize,
+              ),
             ),
           ),
         ),
