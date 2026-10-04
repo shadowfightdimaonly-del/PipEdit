@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 
 import '../services/file_system_service.dart';
 import '../services/storage_access_service.dart';
@@ -116,11 +117,101 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
       return;
     }
     if (entity is File) {
+      if (_isMediaFile(entity.path)) {
+        await _openMediaFile(entity);
+        return;
+      }
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => CodeEditorScreen(file: entity)),
       );
       await _refresh();
     }
+  }
+
+  bool _isMediaFile(String path) {
+    final extension = path.split('.').last.toLowerCase();
+    return {
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'bmp',
+      'heic',
+      'heif',
+      'mp4',
+      'mkv',
+      'webm',
+      'mov',
+      'avi',
+      '3gp',
+      'm4v',
+      'mp3',
+      'wav',
+      'ogg',
+      'oga',
+      'm4a',
+      'aac',
+      'flac',
+      'amr',
+    }.contains(extension);
+  }
+
+  Future<void> _openMediaFile(File file) async {
+    try {
+      final result = await OpenFilex.open(file.path);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _showError(
+          result.message.isEmpty
+              ? 'Не удалось открыть файл'
+              : result.message,
+        );
+      }
+    } catch (e) {
+      _showError('Не удалось открыть файл: $e');
+    }
+  }
+
+  IconData _fileIcon(FileSystemEntity entity) {
+    if (entity is Directory) return Icons.folder_outlined;
+    final extension = _name(entity).split('.').last.toLowerCase();
+    if ({
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'bmp',
+      'heic',
+      'heif',
+    }.contains(extension)) {
+      return Icons.image_outlined;
+    }
+    if ({
+      'mp4',
+      'mkv',
+      'webm',
+      'mov',
+      'avi',
+      '3gp',
+      'm4v',
+    }.contains(extension)) {
+      return Icons.video_file_outlined;
+    }
+    if ({
+      'mp3',
+      'wav',
+      'ogg',
+      'oga',
+      'm4a',
+      'aac',
+      'flac',
+      'amr',
+    }.contains(extension)) {
+      return Icons.audio_file_outlined;
+    }
+    return Icons.insert_drive_file_outlined;
   }
 
   Future<void> _pickFolderWithoutFullAccess() async {
@@ -493,11 +584,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
                           final entity = _entries[index];
                           final directory = entity is Directory;
                           return ListTile(
-                            leading: Icon(
-                              directory
-                                  ? Icons.folder_outlined
-                                  : Icons.insert_drive_file_outlined,
-                            ),
+                            leading: Icon(_fileIcon(entity)),
                             title: Text(
                               _name(entity),
                               overflow: TextOverflow.ellipsis,
